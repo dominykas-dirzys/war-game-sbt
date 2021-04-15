@@ -1,6 +1,7 @@
 import enumeratum._
 import enumeratum.values.{IntEnum, IntEnumEntry}
 
+import scala.annotation.tailrec
 import scala.util.Random
 
 object WarGame extends App {
@@ -38,7 +39,12 @@ object WarGame extends App {
 
   }
 
-  case class Card(rank: Rank, suite: Suite)
+  case class Card(rank: Rank, suite: Suite) {
+    def value(trumpSuite: Suite): Int =
+      if (suite == trumpSuite) rank.value + 13
+      else rank.value
+  }
+
   case class Player(hand: Set[Card], scorePile: Set[Card])
   case class State(player1: Player, player2: Player)
 
@@ -60,9 +66,6 @@ object WarGame extends App {
       r <- Rank.values
     } yield Card(r, s)).toSet
 
-  println(makeDeck())
-  println(makeDeck().size)
-
   def makeHands(): (Set[Card], Set[Card]) = {
     val shuffled = Random.shuffle(makeDeck())
 
@@ -70,12 +73,6 @@ object WarGame extends App {
 
     val player1Hand = shuffled.take(half)
     val player2Hand = shuffled.drop(half)
-
-//    println(player1Hand)
-    println(player1Hand.size)
-
-//    println(player2Hand)
-    println(player2Hand.size)
 
     (player1Hand, player2Hand)
   }
@@ -94,44 +91,26 @@ object WarGame extends App {
   println("Trump suite is - " + trumpSuite)
 
   def next(state: State): State = {
-    var player1Hand = state.player1.hand
-    var player2Hand = state.player2.hand
+    var player1Hand      = state.player1.hand
+    var player2Hand      = state.player2.hand
     var player1ScorePile = state.player1.scorePile
     var player2ScorePile = state.player2.scorePile
 
-    val player1Card       = player1Hand.head
-    val player2Card       = player2Hand.head
-    val p1CardIsTrumpCard = player1Card.suite == trumpSuite
-    val p2CardIsTrumpCard = player2Card.suite == trumpSuite
+    val player1Card = player1Hand.head
+    val player2Card = player2Hand.head
 
-    def fight(): Unit = {
-      if (player1Card.rank.value > player2Card.rank.value) {
-        println(player1Card + " beats " + player2Card)
-        player1ScorePile += player1Card
-        player1ScorePile += player2Card
-      } else if (player1Card.rank.value == player2Card.rank.value) {
-        println(player1Card + " ties with " + player2Card)
-        player1ScorePile += player1Card
-        player2ScorePile += player2Card
-      } else {
-        println(player2Card + " beats " + player1Card)
-        player2ScorePile += player1Card
-        player2ScorePile += player2Card
-      }
-    }
-
-    if (p1CardIsTrumpCard && p2CardIsTrumpCard) {
-      fight()
-    } else if (p1CardIsTrumpCard && !p2CardIsTrumpCard) {
-      println(player1Card + " beats " + player2Card)
+    if (player1Card.value(trumpSuite) > player2Card.value(trumpSuite)) {
+      println("P1 " + player1Card + " beats P2 " + player2Card)
       player1ScorePile += player1Card
       player1ScorePile += player2Card
-    } else if (!p1CardIsTrumpCard && p2CardIsTrumpCard) {
-      println(player2Card + " beats " + player1Card)
-      player2ScorePile += player1Card
+    } else if (player1Card.value(trumpSuite) == player2Card.value(trumpSuite)) {
+      println("P1 " + player1Card + " ties with P2 " + player2Card)
+      player1ScorePile += player1Card
       player2ScorePile += player2Card
     } else {
-      fight()
+      println("P2 " + player2Card + " beats P1 " + player1Card)
+      player2ScorePile += player1Card
+      player2ScorePile += player2Card
     }
 
     player1Hand -= player1Card
@@ -140,16 +119,29 @@ object WarGame extends App {
     State(Player(player1Hand, player1ScorePile), Player(player2Hand, player2ScorePile))
   }
 
-  def play(initialState: State): GameResult = ???
+  def play(initialState: State): GameResult = {
+    val rounds: Int = initialState.player1.hand.size
+    @tailrec def tailRecPlay(state: State, n: Int): State = {
+      if (n < 1)
+        state
+      else
+        tailRecPlay(next(state), n - 1)
+    }
+    val endState = tailRecPlay(initialState, rounds)
+
+    val p1Score = endState.player1.scorePile.size
+    val p2Score = endState.player2.scorePile.size
+
+    println("Player 1 scored: " + p1Score)
+    println("Player 2 scored: " + p2Score)
+
+    if (p1Score > p2Score)
+      Player1Wins
+    else if (p1Score < p2Score)
+      Player2Wins
+    else
+      Draw
+  }
+
+  showResult(play(initState))
 }
-
-// 1. set up a Scala "hello world" project
-// 2. implement the enum types
-// 3. implement makeHands method
-// 4. implement initialState creation method
-// then we'll talk about how to do a recursive `next`
-
-// enums are in enumeratum library https://github.com/lloydmeta/enumeratum
-// libraryDependencies ++= Seq(
-//    "com.beachape" %% "enumeratum" % "1.6.1"
-// )
